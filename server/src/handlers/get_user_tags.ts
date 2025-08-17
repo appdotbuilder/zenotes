@@ -1,8 +1,19 @@
+import { db } from '../db';
+import { tagsTable } from '../db/schema';
 import { type GetUserTagsInput, type Tag } from '../schema';
+import { eq, asc } from 'drizzle-orm';
 
 export async function getUserTags(input: GetUserTagsInput): Promise<Tag[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching all tags created by a specific user.
-    // Should return tags sorted by creation date or alphabetically.
-    return [];
+  try {
+    const results = await db.select()
+      .from(tagsTable)
+      .where(eq(tagsTable.user_id, input.user_id))
+      .orderBy(asc(tagsTable.name))
+      .execute();
+
+    return results;
+  } catch (error) {
+    console.error('Get user tags failed:', error);
+    throw error;
+  }
 }

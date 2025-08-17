@@ -1,8 +1,48 @@
+import { db } from '../db';
+import { foldersTable, notesTable } from '../db/schema';
 import { type DeleteFolderInput } from '../schema';
+import { eq, and } from 'drizzle-orm';
 
-export async function deleteFolder(input: DeleteFolderInput): Promise<{ success: boolean }> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is deleting a folder and handling its contents.
-    // Should validate user ownership and handle notes/subfolders (move to parent or delete).
-    return Promise.resolve({ success: true });
-}
+export const deleteFolder = async (input: DeleteFolderInput): Promise<{ success: boolean }> => {
+  try {
+    // First, verify the folder exists and belongs to the user
+    const folder = await db.select()
+      .from(foldersTable)
+      .where(and(
+        eq(foldersTable.id, input.id),
+        eq(foldersTable.user_id, input.user_id)
+      ))
+      .execute();
+
+    if (folder.length === 0) {
+      throw new Error('Folder not found or access denied');
+    }
+
+    const folderToDelete = folder[0];
+
+    // Move all notes from this folder to its parent folder (or null if root)
+    await db.update(notesTable)
+      .set({ folder_id: folderToDelete.parent_folder_id })
+      .where(eq(notesTable.folder_id, input.id))
+      .execute();
+
+    // Move all subfolders to the parent folder (or null if root)
+    await db.update(foldersTable)
+      .set({ parent_folder_id: folderToDelete.parent_folder_id })
+      .where(eq(foldersTable.parent_folder_id, input.id))
+      .execute();
+
+    // Delete the folder itself
+    await db.delete(foldersTable)
+      .where(and(
+        eq(foldersTable.id, input.id),
+        eq(foldersTable.user_id, input.user_id)
+      ))
+      .execute();
+
+    return { success: true };
+  } catch (error) {
+    console.error('Folder deletion failed:', error);
+    throw error;
+  }
+};
